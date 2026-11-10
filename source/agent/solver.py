@@ -1,4 +1,3 @@
-
 import re
 import sys
 import time
@@ -9,6 +8,9 @@ from .formatter import finalize, is_valid
 from .llm import chat, LLMError
 from .prompts import CODE_SYSTEM, COT_SYSTEM, build_hint
 from .sandbox import run_code_detailed
+
+
+NO_UNIQUE = "No unique solution"
 
 
 def _log(*parts):
@@ -47,12 +49,12 @@ def _code_user(problem, variant=0):
     return "Write the Python program that solves this.\n\n" + msg
 
 
-def _generate_code(problem, temperature, timeout, variant=0):
+def _generate_code(problem, temperature, timeout, variant=0, max_tokens=None):
     response = chat(
         CODE_SYSTEM,
         _code_user(problem, variant),
         temperature=temperature,
-        max_tokens=config.CODE_TOKENS,
+        max_tokens=max_tokens or config.CODE_TOKENS,
         think=config.CODE_THINK,
         timeout=timeout
     )
@@ -138,7 +140,6 @@ def _cot_attempt(problem, timeout, lenient=False):
 
     if is_valid(problem, answer):
         return answer
-    # lenient: any non-empty single-line answer beats an empty output
     if lenient and answer and "\n" not in answer and len(answer) < 200:
         return answer
     return None
@@ -153,16 +154,18 @@ def solve(problem: str) -> str:
     calls = 0
     repaired = False
 
-    # Limit unnecessary candidate generation.
     sample_limit = min(config.MAX_CODE_SAMPLES, 3)
 
     def remaining():
         return config.TIME_BUDGET - (time.time() - started)
 
+    state = {"timeouts": 0}
+
     def call_timeout():
+        share = 0.6 if state["timeouts"] == 0 else 0.9
         return max(
-            1,
-            min(config.REQUEST_TIMEOUT, int(remaining()))
+            20,
+            min(config.REQUEST_TIMEOUT, int(remaining() * share))
         )
 
     for index in range(sample_limit):
@@ -179,7 +182,8 @@ def solve(problem: str) -> str:
                 problem,
                 temperature,
                 call_timeout(),
-                variant=1 if index == 2 else 0
+                variant=1 if index == 2 else 0,
+                max_tokens=700 if state["timeouts"] else None
             )
 
             _log(
@@ -192,7 +196,6 @@ def solve(problem: str) -> str:
             if answer:
                 votes[answer] += 1
 
-                # Two independent candidates agree.
                 if votes[answer] >= 2:
                     _log("consensus", repr(answer))
                     return answer
@@ -228,6 +231,9 @@ def solve(problem: str) -> str:
 
         except LLMError as exc:
             _log("llm error", exc)
+            if "timeout" in str(exc).lower() and remaining() > 45:
+                state["timeouts"] += 1  
+                continue
             break
 
         except Exception as exc:
@@ -238,7 +244,6 @@ def solve(problem: str) -> str:
             )
             break
 
-    # Select the strongest program candidate.
     if votes:
         answer, count = votes.most_common(1)[0]
 
@@ -253,7 +258,6 @@ def solve(problem: str) -> str:
 
         return answer
 
-    # Reasoning fallback if program generation failed.
     if remaining() > 25 and calls < config.MAX_LLM_CALLS:
         try:
             calls += 1
@@ -275,4 +279,7 @@ def solve(problem: str) -> str:
         except Exception as exc:
             _log("cot error", type(exc).__name__, exc)
 
+    if is_valid(problem, NO_UNIQUE):
+        _log("fallback", repr(NO_UNIQUE))
+        return NO_UNIQUE
     return ""
