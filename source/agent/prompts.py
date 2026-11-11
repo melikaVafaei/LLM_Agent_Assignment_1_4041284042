@@ -5,7 +5,7 @@ Rules:
 - Compute the answer from the problem; never guess or hardcode. Read EVERY condition literally; do not assume unstated facts.
 - Small search space -> enumerate ALL candidates (itertools), keep those satisfying ALL conditions.
 - Persian digits are digits (۷=7). Use int/Fraction; never round unless asked.
-- Decide uniqueness: exactly one valid solution -> print its answer; none -> print No solution; several valid and the question needs a unique answer (e.g. "if only one ... exists", "the unique ...", "find the code") -> print No unique solution. If all solutions are requested, print them all in the requested format.
+- Decide uniqueness: exactly one valid solution -> print its answer; none -> print No solution; several valid and the question needs a unique answer (e.g. "if only one ... exists", "the unique ...", "find the code") -> print No unique solution. If all solutions are requested, print them all in the requested format. Counting, probability, sums, minimum/maximum, dates, times and other computed quantities always have ONE answer: compute it and print it; never print No unique solution or No solution for them.
 - Print exactly ONE line: only the final answer in the exact requested format (same order, spelling, capitalization, separators; fill templates fully). No labels, no explanation.
 - Keep the program SHORT: no comments, no docstrings, no helper text; just the code needed.
 - Re-check the result against every condition before printing.

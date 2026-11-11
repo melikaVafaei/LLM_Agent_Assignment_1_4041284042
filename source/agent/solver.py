@@ -39,6 +39,25 @@ def _extract_code(text):
     return None
 
 
+def _run_partial(problem, partial):
+    """After a timeout: use the code generated so far, only if it is syntactically complete
+    and produces a format-valid answer. Used only when nothing better exists."""
+    text = partial or ""
+    m = re.search(r"```(?:python|py)?[ \t]*\n(.*)$", text, re.S | re.I)
+    code = (m.group(1) if m else "").split("```")[0].strip()
+    if not code or "print(" not in code:
+        return None
+    try:
+        compile(code, "<partial>", "exec")
+    except SyntaxError:
+        return None
+    raw, error = run_code_detailed(code)
+    if error:
+        return None
+    answer = finalize(problem, raw)
+    return answer if is_valid(problem, answer) else None
+
+
 def _code_user(problem, variant=0):
     hint = build_hint(problem)
     msg = "PROBLEM:\n" + problem
@@ -56,7 +75,8 @@ def _generate_code(problem, temperature, timeout, variant=0, max_tokens=None):
         temperature=temperature,
         max_tokens=max_tokens or config.CODE_TOKENS,
         think=config.CODE_THINK,
-        timeout=timeout
+        timeout=timeout,
+        stop_at_code=True
     )
 
     code = _extract_code(response)
@@ -161,12 +181,11 @@ def solve(problem: str) -> str:
 
     state = {"timeouts": 0}
 
+    weak = []   # answers recovered from partial (timed-out) generations
+
     def call_timeout():
-        share = 0.6 if state["timeouts"] == 0 else 0.9
-        return max(
-            20,
-            min(config.REQUEST_TIMEOUT, int(remaining() * share))
-        )
+        # A slow call that is still producing a good answer is better than a cut one.
+        return max(20, min(config.REQUEST_TIMEOUT, int(remaining() - 8)))
 
     for index in range(sample_limit):
 
@@ -231,9 +250,14 @@ def solve(problem: str) -> str:
 
         except LLMError as exc:
             _log("llm error", exc)
-            if "timeout" in str(exc).lower() and remaining() > 45:
-                state["timeouts"] += 1  
-                continue
+            if "timeout" in str(exc).lower():
+                part = _run_partial(problem, getattr(exc, "partial", ""))
+                _log("partial", repr(part))
+                if part:
+                    weak.append(part)
+                if remaining() > 45:
+                    state["timeouts"] += 1   # retry with a shorter limit
+                    continue
             break
 
         except Exception as exc:
@@ -257,6 +281,10 @@ def solve(problem: str) -> str:
         )
 
         return answer
+
+    if weak:
+        _log("using partial-code answer", repr(weak[0]))
+        return weak[0]
 
     if remaining() > 25 and calls < config.MAX_LLM_CALLS:
         try:

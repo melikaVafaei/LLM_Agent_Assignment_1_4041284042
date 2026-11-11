@@ -1,3 +1,4 @@
+import json
 import re
 import sys
 import time
@@ -11,7 +12,7 @@ _resolved_model = None
 
 
 class LLMError(RuntimeError):
-    pass
+    partial = ""
 
 
 def _check_local():
@@ -47,31 +48,64 @@ def _model():
         print(f"[llm] Could not verify installed model: {exc}", file=sys.stderr)
     return _resolved_model
 
-def chat(system, user, temperature=0.0, max_tokens=2500, think=False, timeout=None):
+_CODE_DONE = re.compile(r"```(?:python|py)?[ \t]*\n.*?```", re.S | re.I)
+
+
+def _code_complete(buf):
+    """True once the reply contains one complete fenced code block (outside <think>)."""
+    if "<think>" in buf and "</think>" not in buf:
+        return False
+    return bool(_CODE_DONE.search(strip_think(buf)))
+
+
+def chat(system, user, temperature=0.0, max_tokens=2500, think=False, timeout=None,
+         stop_at_code=False):
+    """Streams the reply. With stop_at_code the request is closed as soon as the first
+    code block ends, so no time is wasted on explanations after the code.
+    On timeout the partial reply is attached to the exception (exc.partial)."""
     _check_local()
     payload = {
         "model": _model(),
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        "stream": False,
+        "stream": True,
         "think": think,
         "keep_alive": "30m",
         "options": {"temperature": temperature, "num_ctx": config.NUM_CTX,
                     "num_predict": max_tokens, "top_p": 0.9},
     }
     t0 = time.time()
+    limit = timeout or config.REQUEST_TIMEOUT
+    deadline = t0 + limit
     last = None
     for attempt in range(2):
+        buf = []
         try:
-            r = _session.post(config.HOST + "/api/chat", json=payload,
-                              timeout=timeout or config.REQUEST_TIMEOUT)
-            r.raise_for_status()
-            msg = r.json()["message"]
-            out = strip_think(msg.get("content") or "")
+            with _session.post(config.HOST + "/api/chat", json=payload, stream=True,
+                               timeout=(10, limit)) as r:
+                r.raise_for_status()
+                for line in r.iter_lines(chunk_size=1):
+                    if time.time() > deadline:
+                        raise requests.exceptions.Timeout("overall deadline reached")
+                    if not line:
+                        continue
+                    chunk = json.loads(line)
+                    if chunk.get("error"):
+                        raise RuntimeError(chunk["error"])
+                    buf.append((chunk.get("message") or {}).get("content") or "")
+                    if stop_at_code and _code_complete("".join(buf)):
+                        break
+                    if chunk.get("done"):
+                        break
+            out = strip_think("".join(buf))
             print(f"[llm] {time.time()-t0:.1f}s think={think} chars={len(out)}", file=sys.stderr)
             return out
-        except requests.exceptions.Timeout as exc:
-            raise LLMError(f"timeout: {exc}")  # retrying would only burn the time budget
         except Exception as exc:
+            # In streaming mode requests reports a read timeout as ConnectionError,
+            # so detect timeouts by type or by message.
+            if isinstance(exc, requests.exceptions.Timeout) or "timed out" in str(exc).lower():
+                err = LLMError(f"timeout: {exc}")  # retrying would only burn the time budget
+                err.partial = strip_think("".join(buf)) if buf else ""
+                raise err
             last = exc
             if "think" in str(exc).lower() or (getattr(exc, "response", None) is not None
                                                 and exc.response.status_code == 400):
