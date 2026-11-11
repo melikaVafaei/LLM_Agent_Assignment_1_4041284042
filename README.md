@@ -220,20 +220,14 @@ LLM_Agent_Assignment_1_4041284042/
 ├── requirements.txt
 ├── README.md
 │
-├── source/
-│   ├── agent/
-│   │   ├── config.py
-│   │   ├── llm.py
-│   │   ├── prompts.py
-│   │   ├── solver.py
-│   │   ├── sandbox.py
-│   │   └── formatter.py
-│   │
-│   └── eval/
-│       ├── run_eval.py
-│       ├── gen.py / gen2.py   (problem generators with brute-force ground truth)
-│       └── colab_eval.ipynb
-│
+└── source/
+    └── agent/
+        ├── config.py
+        ├── llm.py
+        ├── prompts.py
+        ├── solver.py
+        ├── sandbox.py
+        └── formatter.py
 ```
 
 **Module overview:**
@@ -245,40 +239,15 @@ LLM_Agent_Assignment_1_4041284042/
 - `solver.py` — Candidate generation, execution, and solution selection.
 - `sandbox.py` — Restricted execution of generated Python code.
 - `formatter.py` — Final answer extraction and format validation.
-- `run_eval.py` — Evaluation entry point.
 
 ---
 
-## 📊 Evaluation
+## 📊 Testing Notes
 
-The project includes an evaluation workflow for measuring performance across different reasoning problem families.
-
-Run:
-
-```bash
-python source/eval/run_eval.py --per-family 10
-python source/eval/run_eval.py --gen2 --per-family 4 --seed 5   # harder, structurally different problems
-```
-
-`gen2.py` marks problems with several valid answers as ambiguous; for those the literal `No unique solution` is accepted.
-
-The evaluation workflow is intended to report:
-
-- Overall accuracy
-- Accuracy by problem family
-- Persian vs. English performance
-- Average execution time
-- Average LLM calls
-
-### Evaluation Principles
-
-- Problems should be generated independently of the agent's solution logic.
-- Ground-truth answers should be computed separately.
-- Exact answer matching should be used when required by the evaluation protocol.
-- Ambiguous questions should be identified rather than treated as having a unique answer.
-- Performance should be measured across multiple problem instances, not only demonstration examples.
-
-**Note:** Evaluation results depend on the selected model, hardware, prompts, execution limits, and test distribution. Actual accuracy should be reported from completed evaluation runs.
+The agent was tested by running `main.py` on the public sample problems and on additional
+self-written problems with brute-force-verified answers. These test tools are not part of the
+submission. Accuracy depends on the model, hardware, prompts and execution limits, and is not
+guaranteed for unseen problems.
 
 ---
 
@@ -349,8 +318,7 @@ Inspect the application logs and review the formatter and validation stages.
 - The project is designed for local execution using Ollama.
 - The configured model must be available locally.
 - The output format is intended to follow the instructor's JSON contract.
-- Accuracy is not guaranteed for every unseen problem; it must be established through independent evaluation.
-- The evaluation script and test results should be verified against the final submitted source code.
+- Accuracy is not guaranteed for every unseen problem.
 
 ---
 
