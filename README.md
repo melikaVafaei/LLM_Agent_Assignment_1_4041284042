@@ -1,9 +1,8 @@
-# 🧠 Program-Aided Reasoning Agent
+#  Program-Aided Reasoning Agent
 ### A Local-First LLM Agent Powered by Ollama and Qwen
 
 A program-aided reasoning system that combines local Large Language Models (LLMs), Python code generation, sandboxed execution, self-consistency, and deterministic answer validation to solve structured reasoning problems.
 
-**No cloud inference. No external API dependency. No hard-coded answers. Just local reasoning and executable problem-solving.**
 
 ---
 
@@ -115,7 +114,7 @@ Start the Ollama service, then pull the required model:
 ollama pull qwen3.8:27b
 ```
 
-> The agent is configured for the instructor's model, `qwen3.8:27b`. It never silently falls back to another model.
+> The agent is configured for the instructor's model, `qwen3.8:27b`.
 
 ### 4. Run the agent
 
@@ -192,7 +191,6 @@ The agent supports environment-based configuration.
 | `COT_THINK` | Thinking configuration for the reasoning fallback |
 | `OLLAMA_CONTEXT` | Context window (default 3072) |
 | `REQUEST_TIMEOUT` | Per-request timeout in seconds |
-| `AGENT_DEBUG` | Set to `1` to print generated programs to stderr |
 
 Example:
 
@@ -240,16 +238,6 @@ LLM_Agent_Assignment_1_4041284042/
 - `sandbox.py` — Restricted execution of generated Python code.
 - `formatter.py` — Final answer extraction and format validation.
 
----
-
-## 📊 Testing Notes
-
-The agent was tested by running `main.py` on the public sample problems and on additional
-self-written problems with brute-force-verified answers. These test tools are not part of the
-submission. Accuracy depends on the model, hardware, prompts and execution limits, and is not
-guaranteed for unseen problems.
-
----
 
 ## 🔒 Local Execution & Safety
 
@@ -318,7 +306,6 @@ Inspect the application logs and review the formatter and validation stages.
 - The project is designed for local execution using Ollama.
 - The configured model must be available locally.
 - The output format is intended to follow the instructor's JSON contract.
-- Accuracy is not guaranteed for every unseen problem.
 
 ---
 
